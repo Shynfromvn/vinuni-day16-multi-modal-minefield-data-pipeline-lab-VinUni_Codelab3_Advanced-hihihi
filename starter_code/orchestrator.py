@@ -21,6 +21,19 @@ from quality_check import run_quality_gate
 # ==========================================
 # Task: Orchestrate the ingestion pipeline and handle errors/SLA.
 
+
+def _append_if_valid(final_kb, payload):
+    if payload is None:
+        return
+
+    documents = payload if isinstance(payload, list) else [payload]
+    for doc in documents:
+        if not doc:
+            continue
+        if run_quality_gate(doc):
+            validated = UnifiedDocument(**doc)
+            final_kb.append(validated.model_dump(mode="json"))
+
 def main():
     start_time = time.time()
     final_kb = []
@@ -38,11 +51,14 @@ def main():
     # TODO: Call each processing function (extract_pdf_data, clean_transcript, etc.)
     # TODO: Run quality gates (run_quality_gate) before adding to final_kb
     # TODO: Save final_kb to output_path using json.dump
-    
-    # Example:
-    # doc = extract_pdf_data(pdf_path)
-    # if doc and run_quality_gate(doc):
-    #     final_kb.append(doc)
+    _append_if_valid(final_kb, extract_pdf_data(pdf_path))
+    _append_if_valid(final_kb, clean_transcript(trans_path))
+    _append_if_valid(final_kb, parse_html_catalog(html_path))
+    _append_if_valid(final_kb, process_sales_csv(csv_path))
+    _append_if_valid(final_kb, extract_logic_from_code(code_path))
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(final_kb, f, indent=2, ensure_ascii=False)
 
     end_time = time.time()
     print(f"Pipeline finished in {end_time - start_time:.2f} seconds.")
